@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"math/big"
 	"os"
@@ -38,13 +40,41 @@ func NewPrefixLogger(prefix string) *PrefixLogger {
 }
 
 func main() {
-	// Connect to Ethereum client
 	client, err := ethclient.Dial(rpcUrl)
 	assertNoErr(err)
-
-	// Execute two pricing methods
+	getPriceFromStorage(client)
 	getPriceFromRouter(client)
 	getPriceFromPair(client)
+}
+
+// forge inspect
+// https://explorer.sim.io/base/23375405/0x88a43bbdf9d098eec7bceda4e2494615dfd9bb9c
+func getPriceFromStorage(client *ethclient.Client) {
+	pairAddress := common.HexToAddress("0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C")
+	storage, err := client.StorageAt(context.Background(), pairAddress, common.BigToHash(big.NewInt(8)), nil) // Get storage at slot 8
+	if err != nil {
+		panic(err)
+	}
+
+	// Convert storage to big.Int for bitwise operations
+	value := new(big.Int).SetBytes(storage)
+	// Create bit masks (1n << 112n) - 1n
+	mask112 := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 112), big.NewInt(1))
+	// Extract reserve0 (least significant 112 bits)
+	reserve0 := new(big.Int).And(value, mask112)
+	// Extract reserve1 (middle 112 bits)
+	reserve1 := new(big.Int).And(
+		new(big.Int).Rsh(value, 112),
+		mask112,
+	)
+
+	// Extract blockTimestampLast (most significant 32 bits)
+	// blockTimestampLast := uint32(new(big.Int).Rsh(value, 224).Uint64())
+
+	// log.Println(reserve0, reserve1, blockTimestampLast)
+	r0, _ := reserve0.Float64()
+	r1, _ := reserve1.Float64()
+	fmt.Println("using StorageAt API, ETH price", (r1/1e6)/(r0/1e18))
 }
 
 // Get price through Router contract
@@ -80,6 +110,7 @@ func getPriceFromPair(client *ethclient.Client) {
 	assertNoErr(err)
 	pairAddr, err := factoryClient.GetPair(nil, common.HexToAddress(wethAddr), common.HexToAddress(usdcAddr))
 	assertNoErr(err)
+	log.Println("pairAddr", pairAddr)
 
 	// Get reserves from Pair contract
 	pairClient, err := bindings.NewPairCaller(pairAddr, client)

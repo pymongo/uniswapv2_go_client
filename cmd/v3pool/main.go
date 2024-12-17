@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"math/big"
 	"uniswapv2_go_client/bindings"
@@ -25,6 +26,13 @@ func main() {
 	noerr(err)
 	slot0, err := pool.Slot0(nil)
 	noerr(err)
+	storage, err := client.StorageAt(context.Background(), pooladdr, common.BigToHash(big.NewInt(0)), nil)
+	noerr(err)
+	sqrtPriceX96_0 := new(big.Int).SetBytes(storage[20:])
+	if sqrtPriceX96_0.Cmp(slot0.SqrtPriceX96) != 0 {
+		log.Fatalln(sqrtPriceX96_0, slot0.SqrtPriceX96)
+	}
+
 	sqrtPrice := new(big.Float).SetInt(slot0.SqrtPriceX96)
 	sqrtPrice = sqrtPrice.Quo(sqrtPrice, q96)
 	price := sqrtPrice.Mul(sqrtPrice, sqrtPrice)

@@ -43,8 +43,8 @@ func main() {
 	client, err := ethclient.Dial(rpcUrl)
 	assertNoErr(err)
 	getPriceFromStorage(client)
-	getPriceFromRouter(client)
-	getPriceFromPair(client)
+	// getPriceFromRouter(client)
+	// getPriceFromPair(client)
 }
 
 // forge inspect
@@ -55,6 +55,7 @@ func getPriceFromStorage(client *ethclient.Client) {
 	if err != nil {
 		panic(err)
 	}
+	// log.Println(len(storage)) // ETH each slot in storage is 32 byte
 
 	// Convert storage to big.Int for bitwise operations
 	value := new(big.Int).SetBytes(storage)

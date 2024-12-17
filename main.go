@@ -7,18 +7,13 @@ import (
 	"math/big"
 	"os"
 	"uniswapv2_go_client/bindings"
+	"uniswapv2_go_client/helper"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-// Constants
-const (
-	rpcUrl     = "https://mainnet.base.org"
-	wethAddr   = "0x4200000000000000000000000000000000000006"
-	usdcAddr   = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-	routerAddr = "0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24"
-)
+const chain = "BASE"
 
 // PrefixLogger is a logger with a prefix
 type PrefixLogger struct {
@@ -40,18 +35,18 @@ func NewPrefixLogger(prefix string) *PrefixLogger {
 }
 
 func main() {
-	client, err := ethclient.Dial(rpcUrl)
+	client, err := ethclient.Dial(helper.ChainInfo[chain].RpcUrl)
 	assertNoErr(err)
 	getPriceFromStorage(client)
-	// getPriceFromRouter(client)
-	// getPriceFromPair(client)
+	getPriceFromRouter(client)
+	getPriceFromPair(client)
 }
 
 // forge inspect
 // https://explorer.sim.io/base/23375405/0x88a43bbdf9d098eec7bceda4e2494615dfd9bb9c
 func getPriceFromStorage(client *ethclient.Client) {
-	pairAddress := common.HexToAddress("0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C")
-	storage, err := client.StorageAt(context.Background(), pairAddress, common.BigToHash(big.NewInt(8)), nil) // Get storage at slot 8
+	info := helper.ChainInfo[chain]
+	storage, err := client.StorageAt(context.Background(), info.V2pair, common.BigToHash(big.NewInt(8)), nil) // Get storage at slot 8
 	if err != nil {
 		panic(err)
 	}
@@ -81,14 +76,12 @@ func getPriceFromStorage(client *ethclient.Client) {
 // Get price through Router contract
 func getPriceFromRouter(client *ethclient.Client) {
 	logger := NewPrefixLogger("Method 1 (Router): ")
+	info := helper.ChainInfo[chain]
 
-	routerClient, err := bindings.NewRouterCaller(common.HexToAddress(routerAddr), client)
+	routerClient, err := bindings.NewRouterCaller(info.V2router, client)
 	assertNoErr(err)
 
-	out, err := routerClient.GetAmountsOut(nil, big.NewInt(1e18), []common.Address{
-		common.HexToAddress(wethAddr),
-		common.HexToAddress(usdcAddr),
-	})
+	out, err := routerClient.GetAmountsOut(nil, big.NewInt(1e18), []common.Address{info.Weth, info.Usdc})
 	assertNoErr(err)
 
 	sellEthGetUsdc, _ := out[1].Float64()
@@ -99,9 +92,10 @@ func getPriceFromRouter(client *ethclient.Client) {
 // Get price and other relevant information through Pair contract
 func getPriceFromPair(client *ethclient.Client) {
 	logger := NewPrefixLogger("Method 2 (Pair): ")
+	info := helper.ChainInfo[chain]
 
 	// Get Factory contract
-	routerClient, err := bindings.NewRouterCaller(common.HexToAddress(routerAddr), client)
+	routerClient, err := bindings.NewRouterCaller(info.V2router, client)
 	assertNoErr(err)
 	factoryAddr, err := routerClient.Factory(nil)
 	assertNoErr(err)
@@ -109,7 +103,7 @@ func getPriceFromPair(client *ethclient.Client) {
 	// Get Pair address
 	factoryClient, err := bindings.NewFactoryCaller(factoryAddr, client)
 	assertNoErr(err)
-	pairAddr, err := factoryClient.GetPair(nil, common.HexToAddress(wethAddr), common.HexToAddress(usdcAddr))
+	pairAddr, err := factoryClient.GetPair(nil, info.Weth, info.Usdc)
 	assertNoErr(err)
 	log.Println("pairAddr", pairAddr)
 
@@ -157,12 +151,12 @@ func getPriceFromPair(client *ethclient.Client) {
 	logger.Printf("Last update time: %d", reserves.BlockTimestampLast)
 
 	// Get other information from Factory
-	feeTo, err := factoryClient.FeeTo(nil)
-	assertNoErr(err)
-	feeToSetter, err := factoryClient.FeeToSetter(nil)
-	assertNoErr(err)
-	logger.Printf("FeeTo address: %s", feeTo.Hex())
-	logger.Printf("FeeToSetter address: %s", feeToSetter.Hex())
+	// feeTo, err := factoryClient.FeeTo(nil)
+	// assertNoErr(err)
+	// feeToSetter, err := factoryClient.FeeToSetter(nil)
+	// assertNoErr(err)
+	// logger.Printf("FeeTo address: %s", feeTo.Hex())
+	// logger.Printf("FeeToSetter address: %s", feeToSetter.Hex())
 }
 
 // Error checking helper function

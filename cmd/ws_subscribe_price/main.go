@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math/big"
 	"uniswapv2_go_client/bindings"
 	"uniswapv2_go_client/helper"
 
@@ -42,7 +43,13 @@ func main() {
 			reserve1 := reserve1_ / 1e6
 			log.Println(syncEvt.Raw.BlockNumber, reserve1/reserve0)
 		case swapEvt := <-swapCh:
-			log.Println(swapEvt.Raw.BlockNumber, helper.EthUsdcPrice(swapEvt.SqrtPriceX96))
+			// SqrtPriceX96: the price of pool after swap
+			isBuy := swapEvt.Amount1.Cmp(big.NewInt(0)) > 0
+			side := "SELL"
+			if isBuy {
+				side = "BUY"
+			}
+			log.Println(swapEvt.Raw.BlockNumber, side, helper.EthUsdcPrice(swapEvt.SqrtPriceX96))
 		}
 	}
 }
